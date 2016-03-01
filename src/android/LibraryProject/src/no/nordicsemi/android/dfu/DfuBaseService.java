@@ -102,6 +102,9 @@ import no.nordicsemi.android.FakeR;
  * </p>
  */
 public abstract class DfuBaseService extends IntentService {
+
+	BluetoothGatt globalGatt;
+
 	private static final String TAG = "DfuBaseService";
 
 	/**
@@ -711,6 +714,8 @@ public abstract class DfuBaseService extends IntentService {
 		@Override
 		public void onConnectionStateChange(final BluetoothGatt gatt, final int status, final int newState) {
 			// Check whether an error occurred
+			logi("********* GATT CALLBACK ******* ");
+			logi("Something has changed!");
 			if (status == BluetoothGatt.GATT_SUCCESS) {
 				if (newState == BluetoothGatt.STATE_CONNECTED) {
 					logi("Connected to GATT server");
@@ -728,7 +733,7 @@ public abstract class DfuBaseService extends IntentService {
 					 *
 					 *  NOTE: We are doing this to avoid the hack with calling the hidden gatt.refresh() method, at least for bonded devices.
 					 */
-					if (gatt.getDevice().getBondState() == BluetoothDevice.BOND_BONDED) {
+					/*if (gatt.getDevice().getBondState() == BluetoothDevice.BOND_BONDED) {
 						try {
 							synchronized (this) {
 								logd("Waiting 1600 ms for a possible Service Changed indication...");
@@ -742,22 +747,47 @@ public abstract class DfuBaseService extends IntentService {
 						} catch (InterruptedException e) {
 							// Do nothing
 						}
-					}
+					}*/
 
 					// Attempts to discover services after successful connection.
-					final boolean success = gatt.discoverServices();
+					/*try {
+						logi("Sleeping for 6 seconds...");
+						Thread.sleep(6000);
+					} catch (final InterruptedException e) {
+						loge("Sleeping interrupted", e);
+					}*/
+
+					boolean success = gatt.discoverServices();
 					logi("Attempting to start service discovery... " + (success ? "succeed" : "failed"));
 
 					if (!success) {
+						try {
+						while(!success){
+							logi("Waiting 1 second before retrying discovery!");
+							Thread.sleep(1000);
+							success = gatt.discoverServices();
+						}
+						if(success){
+							return;
+						}
+						}catch (final InterruptedException e){
+							loge("Sleeping interrupted", e);
+						}
 						mError = ERROR_SERVICE_DISCOVERY_NOT_STARTED;
 					} else {
 						// Just return here, lock will be notified when service discovery finishes
 						return;
 					}
-				} else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
+				}
+				else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
 					logi("Disconnected from GATT server");
 					mPaused = false;
 					mConnectionState = STATE_DISCONNECTED;
+					try {
+						Thread.sleep(1000);
+					} catch (final InterruptedException e) {
+						loge("Sleeping interrupted", e);
+					}
 				}
 			} else {
 				loge("Connection state change error: " + status + " newState: " + newState);
@@ -1100,6 +1130,7 @@ public abstract class DfuBaseService extends IntentService {
 
 		mDeviceAddress = deviceAddress;
 		mDeviceName = deviceName;
+		logi("I am looking for device with Name: "+mDeviceName);
 		mConnectionState = STATE_DISCONNECTED;
 		mBytesSent = 0;
 		mBytesConfirmed = 0;
@@ -1208,6 +1239,7 @@ public abstract class DfuBaseService extends IntentService {
 			updateProgressNotification(PROGRESS_CONNECTING);
 
 			final BluetoothGatt gatt = connect(deviceAddress);
+			globalGatt = gatt;
 			// Are we connected?
 			if (gatt == null) {
 				loge("Bluetooth adapter disabled");
@@ -1270,7 +1302,7 @@ public abstract class DfuBaseService extends IntentService {
 				updateProgressNotification(PROGRESS_STARTING);
 
 				// Read the version number if available. The version number consists of 2 bytes: major and minor. Therefore f.e. the version 5 (00-05) can be read as 0.5.
-				int version = 0;
+				int version = 1;
 				if (versionCharacteristic != null) {
 					version = readVersion(gatt, versionCharacteristic);
 					final int minor = (version & 0x0F);
@@ -1285,9 +1317,9 @@ public abstract class DfuBaseService extends IntentService {
 				 *  In the DFU from SDK 6.1, which was also supporting the buttonless update, there was no DFU Version characteristic. In that case we may find out whether
 				 *  we are in the bootloader or application by simply checking the number of characteristics.
 				 */
-				if (version == 1 || (version == 0 && gatt.getServices().size() > 3 /* No DFU Version char but more services than Generic Access, Generic Attribute, DFU Service */)) {
+				//if (version == 1 || (version == 0 && gatt.getServices().size() > 3 /* No DFU Version char but more services than Generic Access, Generic Attribute, DFU Service */)) {
 					// The service is connected to the application, not to the bootloader
-					logw("Application with buttonless update found");
+					/*logw("Application with buttonless update found");
 					sendLogBroadcast(LOG_LEVEL_WARNING, "Application with buttonless update found");
 
 					// If we are bonded we may want to enable Service Changed characteristic indications.
@@ -1304,7 +1336,7 @@ public abstract class DfuBaseService extends IntentService {
 								if (!serviceChangedIndicationsEnabled) {
 									enableCCCD(gatt, serviceChangedCharacteristic, INDICATIONS);
 									sendLogBroadcast(LOG_LEVEL_APPLICATION, "Service Changed indications enabled");
-
+								*/
 									/*
 									 * NOTE: The DFU Bootloader from SDK 8.0 (v0.6 and 0.5) has the following issue:
 									 *
@@ -1328,6 +1360,7 @@ public abstract class DfuBaseService extends IntentService {
 									 * The DFU Bootloader will send the SD indication anyway when we will just continue here, as the information whether it should send it or not it is not being
 									 * read from the application's ATT table, but rather passed as an argument of the "reboot to bootloader" method.
 									 */
+									 /*
 									final boolean keepBond = intent.getBooleanExtra(EXTRA_KEEP_BOND, false);
 									if (keepBond && (fileType & TYPE_SOFT_DEVICE) == 0) {
 										sendLogBroadcast(LOG_LEVEL_VERBOSE, "Restarting service...");
@@ -1371,7 +1404,7 @@ public abstract class DfuBaseService extends IntentService {
 					// The device will reset so we don't have to send Disconnect signal.
 					waitUntilDisconnected();
 					sendLogBroadcast(LOG_LEVEL_INFO, "Disconnected by the remote device");
-
+					*/
 					/*
 					 * We would like to avoid using the hack with refreshing the device (refresh method is not in the public API). The refresh method clears the cached services and causes a
 					 * service discovery afterwards (when connected). Android, however, does it itself when receive the Service Changed indication when bonded.
@@ -1385,7 +1418,8 @@ public abstract class DfuBaseService extends IntentService {
 					 * However, as up to Android 5 the system does NOT respect this requirement and servers are cached for every device, even if Service Changed is enabled -> Android BUG?
 					 * For bonded devices Android performs service re-discovery when SC indication is received.
 					 */
-					refreshDeviceCache(gatt, !hasServiceChanged);
+					 /*
+					refreshDeviceCache(gatt, true);
 
 					// Close the device
 					close(gatt);
@@ -1395,7 +1429,7 @@ public abstract class DfuBaseService extends IntentService {
 					newIntent.fillIn(intent, Intent.FILL_IN_COMPONENT | Intent.FILL_IN_PACKAGE);
 					startService(newIntent);
 					return;
-				}
+				}*/
 
 				// Enable notifications
 				enableCCCD(gatt, controlPointCharacteristic, NOTIFICATIONS);
@@ -1734,6 +1768,16 @@ public abstract class DfuBaseService extends IntentService {
 								// do nothing
 							}
 						}
+						Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+						enableBtIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+						startActivity(enableBtIntent);
+						try {
+							logi("Waiting 10 seconds to give user chance to click a button.");
+							Thread.sleep(10000);
+						}catch (InterruptedException e){
+							// do nothing
+						}
+						
 						updateProgressNotification(PROGRESS_COMPLETED);
 					} else {
 						/*
@@ -1909,12 +1953,43 @@ public abstract class DfuBaseService extends IntentService {
 	 * @return the GATT device or <code>null</code> if Bluetooth adapter is disabled.
 	 */
 	private BluetoothGatt connect(final String address) {
-		if (!mBluetoothAdapter.isEnabled())
-			return null;
 
 		mConnectionState = STATE_CONNECTING;
+		reinit = true;
+		boolean success;
+
+		try{
+			logi("Disabling adapter...");
+			success = mBluetoothAdapter.disable();
+			logi("Result is: "+String.valueOf(success));
+			Thread.sleep(100);
+		}catch(final InterruptedException e){
+			logi("We were interrupted.");
+		}
+
+		try{
+			logi("Enabling adapter...");
+			success = mBluetoothAdapter.enable();
+			logi("Result is: "+String.valueOf(success));
+			Thread.sleep(100);
+		}catch(final InterruptedException e){
+			logi("We were interrupted.");
+		}
+
+		initialize();
 
 		logi("Connecting to the device...");
+		if(!mBluetoothAdapter.isEnabled()){
+			logi("Bluetooth Adapter is still not enabled. What the FFFFFFFFUUUUUUUUU");
+			logi("Enabling adapter...");
+			success = mBluetoothAdapter.enable();
+			logi("Result is: "+String.valueOf(success));
+			try{
+				Thread.sleep(1000);
+			}catch(InterruptedException e){
+				logi("We were interrupted");
+			}
+		}
 		final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
 		final BluetoothGatt gatt = device.connectGatt(this, false, mGattCallback);
 
@@ -1978,13 +2053,22 @@ public abstract class DfuBaseService extends IntentService {
 	 */
 	private void waitUntilDisconnected() {
 		try {
+			globalGatt.disconnect();
+			Thread.sleep(3000);
+
+
 			synchronized (mLock) {
-				while (mConnectionState != STATE_DISCONNECTED && mError == 0)
+				logi("Connection State: "+Integer.toString(mConnectionState)+". Waiting for Disconnect (" + Integer.toString(STATE_DISCONNECTED) + ")");
+				while (mConnectionState != STATE_DISCONNECTED && mError == 0){
+
+					logi("Connection State: "+Integer.toString(mConnectionState)+". Waiting for Disconnect (" + Integer.toString(STATE_DISCONNECTED) + ")");
 					mLock.wait();
+				}
 			}
 		} catch (final InterruptedException e) {
 			loge("Sleeping interrupted", e);
 		}
+
 	}
 
 	/**
@@ -2658,7 +2742,7 @@ public abstract class DfuBaseService extends IntentService {
 		final Intent intent = new Intent(this, getNotificationTarget());
 		intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 		intent.putExtra(EXTRA_DEVICE_ADDRESS, deviceAddress);
-		intent.putExtra(EXTRA_DEVICE_NAME, deviceName);
+		intent.putExtra(EXTRA_DEVICE_NAME, "DfuTarg");
 		intent.putExtra(EXTRA_PROGRESS, progress); // this may contains ERROR_CONNECTION_MASK bit!
 		final PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
 		builder.setContentIntent(pendingIntent);
@@ -2744,6 +2828,7 @@ public abstract class DfuBaseService extends IntentService {
 		broadcast.putExtra(EXTRA_LOG_LEVEL, level);
 		broadcast.putExtra(EXTRA_DEVICE_ADDRESS, mDeviceAddress);
 		LocalBroadcastManager.getInstance(this).sendBroadcast(broadcast);
+		logi(message);
 	}
 
 	/**
@@ -2751,9 +2836,29 @@ public abstract class DfuBaseService extends IntentService {
 	 *
 	 * @return <code>true</code> if initialization was successful
 	 */
+	static boolean reinit = false;
 	private boolean initialize() {
 		// For API level 18 and above, get a reference to BluetoothAdapter through
 		// BluetoothManager.
+
+		if(reinit){
+			logi("Reinitializing BM & BA...");
+			Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+			enableBtIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			startActivity(enableBtIntent);
+
+			try{
+				logi("Sleeping 10 seconds to give user time to click a button.");
+				Thread.sleep(10000);
+				logi("Finished sleeping.");
+			}catch(InterruptedException e){
+				logi("We were interrupted");
+			}
+
+			mBluetoothAdapter = null;
+			reinit = false;
+		}
+
 		final BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
 		if (bluetoothManager == null) {
 			loge("Unable to initialize BluetoothManager.");
