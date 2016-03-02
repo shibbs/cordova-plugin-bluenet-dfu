@@ -1768,16 +1768,10 @@ public abstract class DfuBaseService extends IntentService {
 								// do nothing
 							}
 						}
-						Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-						enableBtIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-						startActivity(enableBtIntent);
-						try {
-							logi("Waiting 10 seconds to give user chance to click a button.");
-							Thread.sleep(10000);
-						}catch (InterruptedException e){
-							// do nothing
-						}
-						
+						/*Intent enableBt = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+						enableBt.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+						startActivity(enableBt);*/
+
 						updateProgressNotification(PROGRESS_COMPLETED);
 					} else {
 						/*
