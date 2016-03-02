@@ -750,12 +750,12 @@ public abstract class DfuBaseService extends IntentService {
 					}*/
 
 					// Attempts to discover services after successful connection.
-					/*try {
+					try {
 						logi("Sleeping for 6 seconds...");
 						Thread.sleep(6000);
 					} catch (final InterruptedException e) {
 						loge("Sleeping interrupted", e);
-					}*/
+					}
 
 					boolean success = gatt.discoverServices();
 					logi("Attempting to start service discovery... " + (success ? "succeed" : "failed"));
