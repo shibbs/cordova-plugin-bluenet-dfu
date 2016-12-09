@@ -334,7 +334,6 @@ public class HexInputStream extends FilterInputStream {
 	}
 
 	private void checkComma(final int comma) throws HexFileValidationException {
-		System.out.println("comma: " + comma);
 		if (comma != ':') {
 			System.out.println("bad comma is  " + comma);
 
