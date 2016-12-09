@@ -27,12 +27,6 @@ import java.io.ByteArrayInputStream;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import android.content.Intent;
-import android.content.BroadcastReceiver;
-import android.support.v4.content.LocalBroadcastManager;
-
-
-
 
 import no.nordicsemi.android.dfu.exception.HexFileValidationException;
 
@@ -54,11 +48,6 @@ public class HexInputStream extends FilterInputStream {
 	private int lastAddress;
 	private int available, bytesRead;
 	private final int MBRSize;
-
-	public static final String BROADCAST_LOG = "no.nordicsemi.android.dfu.broadcast.BROADCAST_LOG";
-	public static final String EXTRA_LOG_MESSAGE = "no.nordicsemi.android.dfu.extra.EXTRA_LOG_INFO";
-	public static final String EXTRA_LOG_LEVEL = "no.nordicsemi.android.dfu.extra.EXTRA_LOG_LEVEL";
-
 
 	/**
 	 * Creates the HEX Input Stream. The constructor calculates the size of the BIN content which is available through {@link #sizeInBytes()}. If HEX file is invalid then the bin size is 0.
