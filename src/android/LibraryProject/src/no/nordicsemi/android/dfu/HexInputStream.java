@@ -51,7 +51,7 @@ public class HexInputStream extends FilterInputStream {
 
 	/**
 	 * Creates the HEX Input Stream. The constructor calculates the size of the BIN content which is available through {@link #sizeInBytes()}. If HEX file is invalid then the bin size is 0.
-	 * 
+	 *
 	 * @param in
 	 *            the input stream to read from
 	 * @param mbrSize
@@ -89,7 +89,7 @@ public class HexInputStream extends FilterInputStream {
 		in.mark(in.available());
 
 		int b, lineSize, offset, type;
-		int lastBaseAddress = 0; // last Base Address, default 0 
+		int lastBaseAddress = 0; // last Base Address, default 0
 		int lastAddress;
 		try {
 			b = in.read();
@@ -100,40 +100,41 @@ public class HexInputStream extends FilterInputStream {
 				offset = readAddress(in);// reading the offset
 				type = readByte(in); // reading the line type
 				switch (type) {
-				case 0x01:
-					// end of file
-					return binSize;
-				case 0x04: {
-					// extended linear address record
+					case 0x01:
+						// end of file
+						return binSize;
+					case 0x04: {
+						// extended linear address record
 					/*
 					 * The HEX file may contain jump to different addresses. The MSB of LBA (Linear Base Address) is given using the line type 4.
 					 * We only support files where bytes are located together, no jumps are allowed. Therefore the newULBA may be only lastULBA + 1 (or any, if this is the first line of the HEX)
 					 */
-					final int newULBA = readAddress(in);
-					if (binSize > 0 && newULBA != (lastBaseAddress >> 16) + 1)
-						return binSize;
-					lastBaseAddress = newULBA << 16;
-					in.skip(2 /* check sum */);
-					break;
-				}
-				case 0x02: {
-					// extended segment address record
-					final int newSBA = readAddress(in) << 4;
-					if (binSize > 0 && (newSBA >> 16) != (lastBaseAddress >> 16) + 1)
-						return binSize;
-					lastBaseAddress = newSBA;
-					in.skip(2 /* check sum */);
-					break;
-				}
-				case 0x00:
-					// data type line
-					lastAddress = lastBaseAddress + offset;
-					if (lastAddress >= mbrSize) // we must skip all data from below last MBR address (default 0x1000) as those are the MBR. The Soft Device starts at the end of MBR (0x1000), the app and bootloader farther more
-						binSize += lineSize;
-					// no break!
-				default:
-					in.skip(lineSize * 2 /* 2 hex per one byte */+ 2 /* check sum */);
-					break;
+						final int newULBA = readAddress(in);
+						if (binSize > 0 && newULBA != (lastBaseAddress >> 16) + 1)
+							return binSize;
+						lastBaseAddress = newULBA << 16;
+						skip(in, 2 /* check sum */);
+						break;
+					}
+					case 0x02: {
+						// extended segment address record
+						final int newSBA = readAddress(in) << 4;
+						if (binSize > 0 && (newSBA >> 16) != (lastBaseAddress >> 16) + 1)
+							return binSize;
+						lastBaseAddress = newSBA;
+						skip(in, 2 /* check sum */);
+						break;
+					}
+					case 0x00:
+						// data type line
+						lastAddress = lastBaseAddress + offset;
+						if (lastAddress >= mbrSize) // we must skip all data from below last MBR address (default 0x1000) as those are the MBR. The Soft Device starts at the end of MBR (0x1000), the app and bootloader farther more
+							binSize += lineSize;
+						// no break!
+					default:
+						final long toBeSkipped = lineSize * 2 /* 2 hex per one byte */+ 2 /* check sum */;
+						skip(in, toBeSkipped);
+						break;
 				}
 				// skip end of line
 				while (true) {
@@ -148,7 +149,6 @@ public class HexInputStream extends FilterInputStream {
 			in.reset();
 		}
 	}
-
 	@Override
 	public int available() {
 		return available - bytesRead;
@@ -156,7 +156,7 @@ public class HexInputStream extends FilterInputStream {
 
 	/**
 	 * Fills the buffer with next bytes from the stream.
-	 * 
+	 *
 	 * @return the size of the buffer
 	 * @throws java.io.IOException
 	 */
@@ -175,6 +175,14 @@ public class HexInputStream extends FilterInputStream {
 		return i;
 	}
 
+	private long skip(final InputStream in, final long offset) throws IOException {
+				long skipped = in.skip(offset);
+				// try to skip 2 times as skip(..) method does not guarantee to skip exactly given number of bytes
+						if (skipped < offset)
+						skipped += in.skip(offset - skipped);
+				return skipped;
+			}
+
 	@Override
 	public int read() throws IOException {
 		throw new UnsupportedOperationException("Please, use readPacket() method instead");
@@ -192,7 +200,7 @@ public class HexInputStream extends FilterInputStream {
 
 	/**
 	 * Returns the total number of bytes.
-	 * 
+	 *
 	 * @return total number of bytes available
 	 */
 	public int sizeInBytes() {
@@ -201,7 +209,7 @@ public class HexInputStream extends FilterInputStream {
 
 	/**
 	 * Returns the total number of packets with given size that are needed to get all available data
-	 * 
+	 *
 	 * @param packetSize
 	 *            the maximum packet size
 	 * @return the number of packets needed to get all the content
@@ -215,7 +223,14 @@ public class HexInputStream extends FilterInputStream {
 
 	/**
 	 * Reads new line from the input stream. Input stream must be a HEX file. The first line is always skipped.
-	 * 
+	 *
+	 * @return the number of data bytes in the new line. 0 if end of file.
+	 * @throws java.io.IOException
+	 *             if this stream is closed or another IOException occurs.
+	 */
+	/**
+	 * Reads new line from the input stream. Input stream must be a HEX file. The first line is always skipped.
+	 *
 	 * @return the number of data bytes in the new line. 0 if end of file.
 	 * @throws java.io.IOException
 	 *             if this stream is closed or another IOException occurs.
@@ -260,40 +275,41 @@ public class HexInputStream extends FilterInputStream {
 
 			// if the line type is no longer data type (0x00), we've reached the end of the file
 			switch (type) {
-			case 0x00:
-				// data type
-				if (lastAddress + offset < MBRSize) { // skip MBR
-					type = -1; // some other than 0
-					pos += in.skip(lineSize * 2 /* 2 hex per one byte */+ 2 /* check sum */);
+				case 0x00:
+					// data type
+					if (lastAddress + offset < MBRSize) { // skip MBR
+						type = -1; // some other than 0
+						pos += skip(in, lineSize * 2 /* 2 hex per one byte */+ 2 /* check sum */);
+					}
+					break;
+				case 0x01:
+					// end of file
+					pos = -1;
+					return 0;
+				case 0x02: {
+					// extended segment address
+					final int address = readAddress(in) << 4;
+					pos += 4;
+					if (bytesRead > 0 && (address >> 16) != (lastAddress >> 16) + 1)
+						return 0;
+					lastAddress = address;
+					pos += skip(in, 2 /* check sum */);
+					break;
 				}
-				break;
-			case 0x01:
-				// end of file
-				pos = -1;
-				return 0;
-			case 0x02: {
-				// extended segment address
-				final int address = readAddress(in) << 4;
-				pos += 4;
-				if (bytesRead > 0 && (address >> 16) != (lastAddress >> 16) + 1)
-					return 0;
-				lastAddress = address;
-				pos += in.skip(2 /* check sum */);
-				break;
-			}
-			case 0x04: {
-				// extended linear address
-				final int address = readAddress(in);
-				pos += 4;
-				if (bytesRead > 0 && address != (lastAddress >> 16) + 1)
-					return 0;
-				lastAddress = address << 16;
-				pos += in.skip(2 /* check sum */);
-				break;
-			}
-			default:
-				pos += in.skip(lineSize * 2 /* 2 hex per one byte */+ 2 /* check sum */);
-				break;
+				case 0x04: {
+					// extended linear address
+					final int address = readAddress(in);
+					pos += 4;
+					if (bytesRead > 0 && address != (lastAddress >> 16) + 1)
+						return 0;
+					lastAddress = address << 16;
+					pos += skip(in, 2 /* check sum */);
+					break;
+				}
+				default:
+					final long toBeSkipped = lineSize * 2 /* 2 hex per one byte */+ 2 /* check sum */;
+					pos += skip(in, toBeSkipped);
+					break;
 			}
 		} while (type != 0);
 
@@ -303,12 +319,11 @@ public class HexInputStream extends FilterInputStream {
 			pos += 2;
 			localBuf[i] = (byte) b;
 		}
-		pos += in.skip(2); // skip the checksum
+		pos += skip(in, 2); // skip the checksum
 		localPos = 0;
 
 		return lineSize;
 	}
-
 	@Override
 	public synchronized void reset() throws IOException {
 		super.reset();
@@ -319,9 +334,13 @@ public class HexInputStream extends FilterInputStream {
 	}
 
 	private void checkComma(final int comma) throws HexFileValidationException {
-		if (comma != ':')
+		if (comma != ':') {
+			System.out.println("bad comma is  " + comma);
+
 			throw new HexFileValidationException("Not a HEX file");
+		}
 	}
+
 
 	private int readByte(final InputStream in) throws IOException {
 		final int first = asciiToInt(in.read());

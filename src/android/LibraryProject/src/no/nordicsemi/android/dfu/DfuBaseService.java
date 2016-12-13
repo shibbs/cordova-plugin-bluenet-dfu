@@ -751,8 +751,8 @@ public abstract class DfuBaseService extends IntentService {
 
 					// Attempts to discover services after successful connection.
 					try {
-						logi("Sleeping for 6 seconds...");
-						Thread.sleep(6000);
+						logi("Sleeping for 10 seconds...");
+						Thread.sleep(10000);
 					} catch (final InterruptedException e) {
 						loge("Sleeping interrupted", e);
 					}
@@ -762,14 +762,14 @@ public abstract class DfuBaseService extends IntentService {
 
 					if (!success) {
 						try {
-						while(!success){
-							logi("Waiting 1 second before retrying discovery!");
-							Thread.sleep(1000);
-							success = gatt.discoverServices();
-						}
-						if(success){
-							return;
-						}
+							while(!success){
+								logi("Waiting 1 second before retrying discovery!");
+								Thread.sleep(1000);
+								success = gatt.discoverServices();
+							}
+							if(success){
+								return;
+							}
 						}catch (final InterruptedException e){
 							loge("Sleeping interrupted", e);
 						}
@@ -1318,7 +1318,7 @@ public abstract class DfuBaseService extends IntentService {
 				 *  we are in the bootloader or application by simply checking the number of characteristics.
 				 */
 				//if (version == 1 || (version == 0 && gatt.getServices().size() > 3 /* No DFU Version char but more services than Generic Access, Generic Attribute, DFU Service */)) {
-					// The service is connected to the application, not to the bootloader
+				// The service is connected to the application, not to the bootloader
 					/*logw("Application with buttonless update found");
 					sendLogBroadcast(LOG_LEVEL_WARNING, "Application with buttonless update found");
 
@@ -2842,8 +2842,8 @@ public abstract class DfuBaseService extends IntentService {
 			startActivity(enableBtIntent);
 
 			try{
-				logi("Sleeping 10 seconds to give user time to click a button.");
-				Thread.sleep(10000);
+				logi("Sleeping 20 seconds to give user time to click a button.");
+				Thread.sleep(20000);
 				logi("Finished sleeping.");
 			}catch(InterruptedException e){
 				logi("We were interrupted");
